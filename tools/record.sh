@@ -8,7 +8,8 @@ CLIENT_ID="kimne78kx3ncx6brgo4mv6wki5h1ko"
 
 PRINT_FILENAME=0
 GROUP="chunked"
-FILENAME_COMMAND=$'date -u \'+%Y_%m_%d_%H_%M_%S_(%Z)\''
+SAVE_FOLDER="/mnt/twitch/streams"
+FILENAME_COMMAND=$'date -u \'+%Y_%m_%d_%H_%M_%S_%Z\''
 
 errf(){ >&2 printf "${@}"; }
 
@@ -147,7 +148,7 @@ done <<< "${IDS}"
       id="$(echo "${line}" | jq -r .data.topic | cut -d . -f 2)"
       message="$(echo "${line}" | jq -r .data.message)"
       message_type="$(echo "${message}" | jq -r .type)"
-      
+
       if [ "${message_type}" == "stream-up" ];
       then
         (
@@ -155,8 +156,8 @@ done <<< "${IDS}"
           errf '[%s] stream started\a\n' "${username}"
           while :
           do
-            mkdir -p "${username}"
-            filename="$(printf "%s/%s.ts" "${username}" "$(safe_name "$(eval "${FILENAME_COMMAND}")")")"
+            mkdir -p "${SAVE_FOLDER}/${username}"
+            filename="${SAVE_FOLDER}/$(printf "%s/%s.ts" "${username}" "${username}-$(safe_name "$(eval "${FILENAME_COMMAND}")")")"
             errf '[%s] recording to %s\n' "${username}" "${filename}"
             (twitchpipe --archive --group "${GROUP}" "${username}" >> "${filename}") 2>&1 | (
               while read -r line;
@@ -170,6 +171,10 @@ done <<< "${IDS}"
               if [ "${PRINT_FILENAME}" == "1" ];
               then
                 printf '%s\n' "${filename}"
+                echo remuxing "${filename}" to "$(echo "$filename" | cut -f 1 -d '.')".mp4
+                ffmpeg -hide_banner -v fatal -i "${filename}" -c copy -bsf:a aac_adtstoasc -copyts -start_at_zero -analyzeduration 300000000 "$(echo "$filename" | cut -f 1 -d '.')".mp4
+                echo deleting "${filename}"
+                rm "${filename}"
               fi
             else
               errf '[%s] output file %s was empty, removing...\n' "${username}" "${filename}"
